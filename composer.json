@@ -1,0 +1,31 @@
+{
+  "name": "statenweb/statenshare",
+  "type": "wordpress-plugin",
+  "authors": [
+    {
+      "name": "Mat Gargano",
+      "email": "mgargano@gmail.com"
+    }
+  ],
+  "repositories": [
+    {
+      "type": "composer",
+      "url": "https://wpackagist.org"
+    }
+  ],
+  "require": {
+    "mnsami/composer-custom-directory-installer": "1.0.*",
+    "htmlburger/carbon-fields": "^2.0"
+  },
+  "require-dev": {
+  },
+  "extra": {
+    "installer-paths": {
+    }
+  },
+  "autoload": {
+    "psr-4": {
+      "StatenShare\\": "inc/"
+    }
+  }
+}
