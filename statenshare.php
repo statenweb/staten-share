@@ -3,9 +3,9 @@
 /*
 Plugin Name: StatenShare
 Plugin URI: http://statenweb.com/statenshare
-Description: Share!
+Description: Easily add share buttons on your content
 Author: Mat Gargano and StatenWeb
-Version: 0.0.1
+Version: 0.0.2
 Author URI: http://statenweb.com
 */
 
