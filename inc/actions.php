@@ -8,7 +8,7 @@ use StatenShare\Settings\Global_Settings;
 
 class Actions extends Thing {
 
-	protected static $output_js = false;
+	protected static $output_on_current_page = null;
 
 
 	public function attach_hooks() {
@@ -19,66 +19,11 @@ class Actions extends Thing {
 	}
 
 	public function head() {
-		?>
-		<style>
-
-			.statenshare {
-				text-align: center;
-				display: flex;
-				align-items: center;
-				justify-content: center;
-				color: <?php echo self::sanitize_hex_color(Global_Settings::get('statenshare_label_color')); ?>
-			}
-
-			.statenshare.statenshare-left {
-				justify-content: flex-start;
-			}
-
-			.statenshare.statenshare-right {
-				justify-content: flex-end;
-			}
-
-			.statenshare-before {
-				margin-bottom: 20px;
-			}
-
-			@media screen and (min-width: 480px) {
-				.statenshare__label {
-					margin-right: 25px;
-				}
-			}
-
-			.statenshare svg {
-				height: 32px;
-				width: 32px;
-
-			}
-
-			<?php if (Global_Settings::get('statenshare_icon_color')  ): ?>
-
-			.statenshare svg path {
-				fill: <?php echo self::sanitize_hex_color(Global_Settings::get('statenshare_icon_color')); ?>
-			}
-
-			<?php endif; ?>
-
-			<?php if (Global_Settings::get('statenshare_icon_color_hover')  ): ?>
-
-			.statenshare svg:hover path {
-				transition: fill .4s ease;
-				fill: <?php echo self::sanitize_hex_color(Global_Settings::get('statenshare_icon_color_hover')); ?>
-			}
-
-			<?php endif; ?>
-
-			.statenshare a.share {
-				text-decoration: none;
-				margin-right: 25px;
-				display: flex;
-			}
-		</style>
-		<?php
-		$this->output_js();
+		if ( ! self::output_media() ) {
+			return;
+		}
+		self::output_css();
+		self::output_js();
 	}
 
 	public function enqueue() {
@@ -173,30 +118,30 @@ class Actions extends Thing {
 
 	}
 
-	public function output_js() {
+	protected static function output_media() {
 
-		if ( ! self::$output_js ) :
-			?>
-			<script>
-              jQuery(document).ready(function($) {
-                var $statenShareLink = $('.statenshare a');
-                $statenShareLink.storyShare();
-                $statenShareLink.on('click', function(e) {
-                  e.preventDefault();
-                });
-              });
-			</script>
-			<?php
+		if ( ! is_null( self::$output_on_current_page ) ) {
+			return self::$output_on_current_page;
+		}
 
-		endif;
+		self::$output_on_current_page = false;
 
-		self::$output_js = true;
+		if (
+			( ( is_archive() || is_home() || is_single() ) && Global_Settings::get( 'statenshare_post_type_' . get_post_type() ) ) &&
+			( ( ( is_home() || is_archive() ) && ( Global_Settings::get( 'statenshare_before_content_archive' ) || Global_Settings::get( 'statenshare_after_content_archive' ) ) ) ||
+			  ( is_single() && ( Global_Settings::get( 'statenshare_after_content_single' ) || Global_Settings::get( 'statenshare_before_content_single' ) ) ) )
+		) {
+			self::$output_on_current_page = true;
+
+		}
+
+		return self::$output_on_current_page;
+
+
 	}
 
-	protected
-	static function sanitize_hex_color(
-		$color
-	) {
+
+	protected static function sanitize_hex_color( $color ) {
 		if ( '' === $color ) {
 			return '';
 		}
@@ -205,6 +150,86 @@ class Actions extends Thing {
 		if ( preg_match( '|^#([A-Fa-f0-9]{3}){1,2}$|', $color ) ) {
 			return $color;
 		}
+	}
+
+	protected static function output_css() {
+		?>
+		<style>
+
+			.statenshare {
+				text-align: center;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				color: <?php echo self::sanitize_hex_color(Global_Settings::get('statenshare_label_color')); ?>
+			}
+
+			.statenshare.statenshare-left {
+				justify-content: flex-start;
+			}
+
+			.statenshare.statenshare-right {
+				justify-content: flex-end;
+			}
+
+			.statenshare-before {
+				margin-bottom: 20px;
+			}
+
+			@media screen and (min-width: 480px) {
+				.statenshare__label {
+					margin-right: 25px;
+				}
+			}
+
+			.statenshare svg {
+				height: 32px;
+				width: 32px;
+
+			}
+
+			<?php if (Global_Settings::get('statenshare_icon_color')  ): ?>
+
+			.statenshare svg path {
+				fill: <?php echo self::sanitize_hex_color(Global_Settings::get('statenshare_icon_color')); ?>
+			}
+
+			<?php endif; ?>
+
+			<?php if (Global_Settings::get('statenshare_icon_color_hover')  ): ?>
+
+			.statenshare svg:hover path {
+				transition: fill .4s ease;
+				fill: <?php echo self::sanitize_hex_color(Global_Settings::get('statenshare_icon_color_hover')); ?>
+			}
+
+			<?php endif; ?>
+
+			.statenshare a.share {
+				text-decoration: none;
+				margin-right: 25px;
+				display: flex;
+			}
+		</style>
+		<?php
+	}
+
+	protected static function output_js() {
+
+
+		?>
+		<script>
+          jQuery(document).ready(function($) {
+            var $statenShareLink = $('.statenshare a');
+            $statenShareLink.storyShare();
+            $statenShareLink.on('click', function(e) {
+              e.preventDefault();
+            });
+          });
+		</script>
+		<?php
+
+
 	}
 
 
