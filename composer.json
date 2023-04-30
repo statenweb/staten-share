@@ -14,18 +14,21 @@
     }
   ],
   "require": {
-    "mnsami/composer-custom-directory-installer": "1.0.*",
+    "mnsami/composer-custom-directory-installer": "2.*",
     "htmlburger/carbon-fields": "^2.0"
   },
-  "require-dev": {
-  },
+  "require-dev": {},
   "extra": {
-    "installer-paths": {
-    }
+    "installer-paths": {}
   },
   "autoload": {
     "psr-4": {
       "StatenShare\\": "inc/"
+    }
+  },
+  "config": {
+    "allow-plugins": {
+      "mnsami/composer-custom-directory-installer": true
     }
   }
 }

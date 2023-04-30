@@ -30,7 +30,8 @@ class Helper {
 	}
 
 	/**
-	 * Get a clone of a field with a value loaded
+	 * Get a clone of a field with a value loaded.
+	 * WARNING: The datastore is cloned!
 	 *
 	 * @param  int    $object_id      Object id to get value for (e.g. post_id, term_id etc.)
 	 * @param  string $container_type Container type to search in. Optional if $container_id is supplied
@@ -47,9 +48,45 @@ class Helper {
 
 		$clone = clone $field;
 		if ( $object_id !== null ) {
+			$clone->set_datastore( clone $clone->get_datastore(), $clone->has_default_datastore() );
 			$clone->get_datastore()->set_object_id( $object_id );
 		}
 		return $clone;
+	}
+
+	/**
+	 * Execute an action with a clone of a field with a value loaded.
+	 * WARNING: The datastore reference is kept!
+	 *
+	 * @param  int      $object_id      Object id to get value for (e.g. post_id, term_id etc.)
+	 * @param  string   $container_type Container type to search in. Optional if $container_id is supplied
+	 * @param  string   $container_id   Container id to search in. Optional if $container_type is supplied
+	 * @param  string   $field_name     Field name to search for
+	 * @param  \Closure $action         Action to execute
+	 * @return void
+	 */
+	public static function with_field_clone( $object_id, $container_type, $container_id, $field_name, $action ) {
+		$field = static::get_field( $container_type, $container_id, $field_name );
+
+		if ( ! $field ) {
+			return;
+		}
+
+		$clone = clone $field;
+		$datastore = $clone->get_datastore();
+		$datastore_object_id = $datastore->get_object_id();
+
+		if ( $object_id !== null ) {
+			$datastore->set_object_id( $object_id );
+		}
+
+		$result = $action($clone);
+
+		if ( $object_id !== null ) {
+			$datastore->set_object_id( $datastore_object_id );
+		}
+
+		return $result;
 	}
 
 	/**
@@ -62,45 +99,58 @@ class Helper {
 	 * @return mixed
 	 */
 	public static function get_value( $object_id, $container_type, $container_id, $field_name ) {
-		$field = static::get_field_clone( $object_id, $container_type, $container_id, $field_name );
+		return static::with_field_clone(
+			$object_id,
+			$container_type,
+			$container_id,
+			$field_name,
+			function( $field ) {
+				if ( ! $field ) {
+					return '';
+				}
 
-		if ( ! $field ) {
-			return '';
-		}
-
-		$field->load();
-		return $field->get_formatted_value();
+				$field->load();
+				return $field->get_formatted_value();
+			}
+		);
 	}
 
 	/**
 	 * Set value for a field
 	 *
-	 * @param int    $object_id      Object id to get value for (e.g. post_id, term_id etc.)
-	 * @param string $container_type Container type to search in
-	 * @param string $container_id
-	 * @param string $field_name     Field name
-	 * @param array $value Field expects a `value_set`; Complex_Field expects a `value_tree` - refer to DEVELOPMENT.md
+	 * @param  int    $object_id      Object id to get value for (e.g. post_id, term_id etc.)
+	 * @param  string $container_type Container type to search in
+	 * @param  string $container_id
+	 * @param  string $field_name     Field name
+	 * @param  array  $value          Field expects a `value_set`. Complex_Field expects a `value_tree` - refer to DEVELOPMENT.md
+	 * @return void
 	 */
 	public static function set_value( $object_id, $container_type, $container_id, $field_name, $value ) {
-		$field = static::get_field_clone( $object_id, $container_type, $container_id, $field_name );
+		static::with_field_clone(
+			$object_id,
+			$container_type,
+			$container_id,
+			$field_name,
+			function( $field ) use ( $container_type, $container_id, $field_name, $value ) {
+				if ( ! $field ) {
+					$container_message = $container_id ? 'in container with id "' . $container_id . '"' : 'in containers of type "' . $container_type . '"';
+					Incorrect_Syntax_Exception::raise( 'Could not find a field which satisfies the supplied pattern ' . $container_message . ': ' . $field_name );
+					return;
+				}
 
-		if ( ! $field ) {
-			$container_message = $container_id ? 'in container with id "' . $container_id . '"' : 'in containers of type "' . $container_type . '"';
-			Incorrect_Syntax_Exception::raise( 'Could not find a field which satisfies the supplied pattern ' . $container_message . ': ' . $field_name );
-			return;
-		}
-
-		$field->set_value( $value );
-		$field->save();
+				$field->set_value( $value );
+				$field->save();
+			}
+		);
 	}
 
 	/**
 	 * Shorthand for get_post_meta().
 	 * Uses the ID of the current post in the loop.
 	 *
-	 * @param  string $name         Custom field name.
+	 * @param  string $name         Field name
 	 * @param  string $container_id
-	 * @return mixed  Meta value.
+	 * @return mixed
 	 */
 	public static function get_the_post_meta( $name, $container_id = '' ) {
 		return static::get_post_meta( get_the_ID(), $name, $container_id );
@@ -109,10 +159,10 @@ class Helper {
 	/**
 	 * Get post meta field for a post.
 	 *
-	 * @param  int    $id           Post ID.
-	 * @param  string $name         Custom field name.
+	 * @param  int    $id           Post ID
+	 * @param  string $name         Field name
 	 * @param  string $container_id
-	 * @return mixed  Meta value.
+	 * @return mixed
 	 */
 	public static function get_post_meta( $id, $name, $container_id = '' ) {
 		return static::get_value( $id, 'post_meta', $container_id, $name );
@@ -122,7 +172,7 @@ class Helper {
 	 * Set post meta field for a post.
 	 *
 	 * @param  int    $id           Post ID
-	 * @param  string $name         Custom field name
+	 * @param  string $name         Field name
 	 * @param  array  $value
 	 * @param  string $container_id
 	 */
@@ -133,9 +183,9 @@ class Helper {
 	/**
 	 * Get theme option field value.
 	 *
-	 * @param  string $name         Custom field name
+	 * @param  string $name         Field name
 	 * @param  string $container_id
-	 * @return mixed  Option        value
+	 * @return mixed
 	 */
 	public static function get_theme_option( $name, $container_id = '' ) {
 		return static::get_value( null, 'theme_options', $container_id, $name );
@@ -153,12 +203,48 @@ class Helper {
 	}
 
 	/**
+	 * Get network option field value for the main site.
+	 *
+	 * @param  string $name         Field name
+	 * @param  string $container_id
+	 * @return mixed
+	 */
+	public static function get_the_network_option( $name, $container_id = '' ) {
+		$id = defined( 'SITE_ID_CURRENT_SITE' ) ? SITE_ID_CURRENT_SITE : 1;
+		return static::get_network_option( $id, $name, $container_id );
+	}
+
+	/**
+	 * Get network option field value for a site.
+	 *
+	 * @param  string $id           Site ID
+	 * @param  string $name         Field name
+	 * @param  string $container_id
+	 * @return mixed
+	 */
+	public static function get_network_option( $id, $name, $container_id = '' ) {
+		return static::get_value( $id, 'network', $container_id, $name );
+	}
+
+	/**
+	 * Set network option field value for a site.
+	 *
+	 * @param  string $id           Site ID
+	 * @param  string $name         Field name
+	 * @param  string $container_id
+	 * @return mixed
+	 */
+	public static function set_network_option( $id, $name, $value, $container_id = '' ) {
+		return static::set_value( $id, 'network', $container_id, $name, $value );
+	}
+
+	/**
 	 * Get term meta field for a term.
 	 *
-	 * @param  int    $id           Term ID.
-	 * @param  string $name         Custom field name.
+	 * @param  int    $id           Term ID
+	 * @param  string $name         Field name
 	 * @param  string $container_id
-	 * @return mixed  Meta value.
+	 * @return mixed
 	 */
 	public static function get_term_meta( $id, $name, $container_id = '' ) {
 		return static::get_value( $id, 'term_meta', $container_id, $name );
@@ -179,10 +265,10 @@ class Helper {
 	/**
 	 * Get user meta field for a user.
 	 *
-	 * @param  int    $id           User ID.
-	 * @param  string $name         Custom field name.
+	 * @param  int    $id           User ID
+	 * @param  string $name         Field name
 	 * @param  string $container_id
-	 * @return mixed  Meta value.
+	 * @return mixed
 	 */
 	public static function get_user_meta( $id, $name, $container_id = '' ) {
 		return static::get_value( $id, 'user_meta', $container_id, $name );
@@ -203,10 +289,10 @@ class Helper {
 	/**
 	 * Get comment meta field for a comment.
 	 *
-	 * @param  int    $id           Comment ID.
-	 * @param  string $name         Custom field name.
+	 * @param  int    $id           Comment ID
+	 * @param  string $name         Field name
 	 * @param  string $container_id
-	 * @return mixed  Meta value.
+	 * @return mixed
 	 */
 	public static function get_comment_meta( $id, $name, $container_id = '' ) {
 		return static::get_value( $id, 'comment_meta', $container_id, $name );
@@ -227,10 +313,10 @@ class Helper {
 	/**
 	 * Get nav menu item meta field for a nav menu item.
 	 *
-	 * @param  int    $id           Nav menu item ID.
-	 * @param  string $name         Custom field name.
+	 * @param  int    $id           Nav menu item ID
+	 * @param  string $name         Field name
 	 * @param  string $container_id
-	 * @return mixed  Meta value.
+	 * @return mixed
 	 */
 	public static function get_nav_menu_item_meta( $id, $name, $container_id = '' ) {
 		return static::get_value( $id, 'nav_menu_item', $container_id, $name );
@@ -539,7 +625,7 @@ class Helper {
 	 * @return array
 	 */
 	public static function input() {
-		$input = $_SERVER['REQUEST_METHOD'] === 'POST' ? $_POST : $_GET;
+		$input = ( isset( $_SERVER['REQUEST_METHOD'] ) && $_SERVER['REQUEST_METHOD'] === 'POST' ) ? $_POST : $_GET;
 		$input = stripslashes_deep( $input );
 
 		if ( \Carbon_Fields\COMPACT_INPUT ) {
@@ -561,5 +647,56 @@ class Helper {
 			$input = array_merge( $input, $json );
 		}
 		return $input;
+	}
+
+	/**
+	 * Get valid input from an input array compared to predefined options
+	 *
+	 * @param  array $input
+	 * @param  array $options
+	 * @return array
+	 */
+	public static function get_valid_options( $input, $options ) {
+		// enfore comparison to be string so we do not get unexpected matches
+		// for cases such as "string without any numbers" == 0
+		// in array_search()
+		$search_options = array_map( 'strval', $options );
+
+		$valid_input = array();
+		foreach ( $input as $raw_value ) {
+			$index = array_search( strval( $raw_value ), $search_options, true );
+
+			if ( $index === false ) {
+				continue;
+			}
+
+			$valid_input[] = $options[ $index ];
+		}
+		return $valid_input;
+	}
+
+	/**
+	 * Get an array of active sidebars
+	 *
+	 * @return array
+	 */
+	public static function get_active_sidebars() {
+		global $wp_registered_sidebars;
+
+		$sidebars = array();
+
+		foreach ( $wp_registered_sidebars as $sidebar ) {
+			// Check if we have inactive sidebars
+			if ( isset( $sidebar['class'] ) && strpos( $sidebar['class'], 'inactive-sidebar' ) !== false ) {
+				continue;
+			}
+
+			$sidebars[] = array(
+				'id'   => $sidebar['id'],
+				'name' => $sidebar['name'],
+			);
+		}
+
+		return $sidebars;
 	}
 }
